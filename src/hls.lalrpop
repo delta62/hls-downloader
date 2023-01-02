@@ -1,0 +1,94 @@
+use crate::ast::{self, Tag};
+use std::str::FromStr;
+
+grammar;
+
+match {
+    r#""[^"\r\n]*""# => QUOT_STR,
+    r"(?i)0x[0-9a-z]+" => HEX_SEQ,
+    r"-?(0|[1-9][0-9]*)\.[0-9]+" => FLOAT,
+    r"0|[1-9][0-9]*" => INT,
+    r"[A-Z][A-Z0-9-]*" => KEYWORD,
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z" => DATETIME,
+} else {
+    r"\n[^#\s]\S*\r?\n" => URI_LINE,
+    _
+}
+
+pub Manifest: ast::Manifest<'input> = {
+    Line* => ast::Manifest::new(<>)
+};
+
+Line: Tag<'input> = {
+    "#EXTINF:" <duration:Float> "," => Tag::Inf { duration, title: None },
+    "#EXTM3U" => Tag::Header,
+    "#EXT-X-BYTERANGE:" <n:DecimalInt> <o:Offset?> => Tag::Byterange { n, o },
+    "#EXT-X-DATERANGE:" <AttrList> => Tag::Daterange(<>),
+    "#EXT-X-DISCONTINUITY-SEQUENCE:" <DecimalInt> => Tag::DiscontinuitySequence(<>),
+    "#EXT-X-DISCONTINUITY" => Tag::Discontinuity,
+    "#EXT-X-ENDLIST" => Tag::EndList,
+    "#EXT-X-I-FRAMES-ONLY:" => Tag::IFramesOnly,
+    "#EXT-X-I-FRAME-STREAM-INF:" <AttrList> => Tag::IFrameStreamInf(<>),
+    "#EXT-X-INDEPENDENT-SEGMENTS" => Tag::IndependentSegments,
+    "#EXT-X-KEY:" <AttrList> => Tag::Key(<>),
+    "#EXT-X-MAP:" <AttrList> => Tag::Map(<>),
+    "#EXT-X-MEDIA:" <AttrList> => Tag::Media(<>),
+    "#EXT-X-MEDIA-SEQUENCE:" <DecimalInt> => Tag::MediaSequence(<>),
+    "#EXT-X-PLAYLIST-TYPE:" <KEYWORD> => Tag::PlaylistType(<>),
+    "#EXT-X-PROGRAM-DATE-TIME:" <DATETIME> => Tag::ProgramDateTime(<>),
+    "#EXT-X-SESSION-DATA:" <AttrList> => Tag::SessionData(<>),
+    "#EXT-X-SESSION-KEY:" <AttrList> => Tag::SessionKey(<>),
+    "#EXT-X-START:" <AttrList> => Tag::Start(<>),
+    "#EXT-X-STREAM-INF:" <attrs:AttrList> <u:Uri> => Tag::StreamInf { attrs, uri: u },
+    "#EXT-X-TARGETDURATION:" <DecimalInt> => Tag::TargetDuration(<>),
+    "#EXT-X-VERSION:" <DecimalInt> => Tag::Version(<>),
+    Uri => Tag::Uri(<>),
+};
+
+Uri: &'input str = {
+    URI_LINE => <>.trim()
+};
+
+AttrList: ast::AttrList<'input> = {
+    <attr:AttrDef> "," <mut list:AttrList> => {
+        list.push(attr);
+        list
+    },
+    AttrDef => vec![<>],
+};
+
+AttrDef: ast::Attr<'input> = {
+    <n:KEYWORD> "=" <v:AttrValue> => ast::Attr::new(n, v),
+};
+
+AttrValue: ast::AttrValue<'input> = {
+    KEYWORD => ast::AttrValue::EnumString(<>),
+    <w:DecimalInt> "x" <h:DecimalInt> => ast::AttrValue::Resolution { width: w, height: h },
+    Float => ast::AttrValue::Float(<>),
+    HexSeq => ast::AttrValue::HexSequence(<>),
+    DecimalInt => ast::AttrValue::Integer(<>),
+    QuotedString => ast::AttrValue::QuotedString(<>),
+};
+
+Offset: u64 = {
+    "@" <DecimalInt> => <>,
+};
+
+DecimalInt: u64 = {
+    INT => u64::from_str(<>).unwrap()
+};
+
+HexSeq: Vec<u8> = {
+    HEX_SEQ => hex::decode(&<>[2..]).unwrap()
+};
+
+QuotedString: &'input str = {
+    QUOT_STR => {
+        let len = <>.len();
+        &<>[1..(len-1)]
+    }
+};
+
+Float: f64 = {
+    FLOAT => f64::from_str(<>).unwrap()
+};
