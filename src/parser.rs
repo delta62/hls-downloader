@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till, take_while},
     character::complete::{char, digit0, digit1, hex_digit1, line_ending, one_of},
-    combinator::{map, opt, recognize, value},
+    combinator::{map, not, opt, peek, recognize, success, value},
     error::Error,
     multi::{many1, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
@@ -27,7 +27,10 @@ impl<'a> Manifest<'a> {
         match all_tags(s).finish() {
             Ok((remaining, lines)) => {
                 if remaining.len() > 0 {
-                    log::error!("Remaining input:\n{}", remaining);
+                    log::error!("Failed to parse! Next 3 lines:");
+                    for i in 0..3 {
+                        log::error!("{:?}", remaining.lines().nth(i));
+                    }
                 }
 
                 Ok(Self { lines })
@@ -49,7 +52,7 @@ pub struct Resolution {
 #[derive(Debug)]
 enum AttributeValue<'a> {
     Integer(u64),
-    Hex(Vec<u8>),
+    Hex(&'a str),
     Float(f64),
     String(&'a str),
     Keyword(&'a str),
@@ -65,11 +68,17 @@ struct Attribute<'a> {
 type Attributes<'a> = Vec<Attribute<'a>>;
 
 #[derive(Debug)]
-enum Tag<'a> {
-    Tag {
-        name: &'a str,
-        attrs: Option<Attributes<'a>>,
-    },
+enum TagArgs<'a> {
+    Attributes(Attributes<'a>),
+    Integer(u64),
+    String(&'a str),
+    None,
+}
+
+#[derive(Debug)]
+struct Tag<'a> {
+    name: &'a str,
+    args: TagArgs<'a>,
 }
 
 fn keyword_start<'a>(i: &'a str) -> IResult<&'a str, char> {
@@ -109,12 +118,20 @@ fn tag_name<'a>(i: &'a str) -> IResult<&'a str, &'a str> {
     preceded(char('#'), keyword1)(i)
 }
 
-fn hex_sequence<'a>(i: &'a str) -> IResult<&'a str, Vec<u8>> {
-    preceded(alt((tag("0x"), tag("0X"))), hex_digit1)(i).map(|(i, s)| (i, hex::decode(s).unwrap()))
+fn hex_sequence<'a>(i: &'a str) -> IResult<&'a str, &'a str> {
+    preceded(alt((tag("0x"), tag("0X"))), hex_digit1)(i)
 }
 
 fn comment<'a>(i: &'a str) -> IResult<&'a str, ()> {
-    value((), pair(char('#'), take_till(|c| "\r\n".contains(c))))(i)
+    value(
+        (),
+        tuple((
+            char('#'),
+            not(tag("EXT")),
+            take_till(|c| "\r\n".contains(c)),
+            line_ending,
+        )),
+    )(i)
 }
 
 fn enum_string<'a>(i: &'a str) -> IResult<&'a str, &'a str> {
@@ -130,10 +147,10 @@ fn resolution<'a>(i: &'a str) -> IResult<&'a str, Resolution> {
 
 fn attr_val<'a>(i: &'a str) -> IResult<&'a str, AttributeValue<'a>> {
     alt((
+        map(hex_sequence, AttributeValue::Hex),
         map(resolution, AttributeValue::Resolution),
         map(float, AttributeValue::Float),
         map(integer, AttributeValue::Integer),
-        map(hex_sequence, AttributeValue::Hex),
         map(quoted_string, AttributeValue::String),
         map(enum_string, AttributeValue::Keyword),
     ))(i)
@@ -148,20 +165,39 @@ fn attrs<'a>(i: &'a str) -> IResult<&'a str, Attributes<'a>> {
     separated_list1(char(','), attr)(i)
 }
 
+fn tag_args<'a>(i: &'a str) -> IResult<&'a str, TagArgs> {
+    alt((
+        map(preceded(char(':'), attrs), |attrs| {
+            TagArgs::Attributes(attrs)
+        }),
+        map(
+            tuple((char(':'), integer, peek(line_ending))),
+            |(_, i, _)| TagArgs::Integer(i),
+        ),
+        map(preceded(char(':'), is_not("\r\n")), |u| TagArgs::String(u)),
+        map(success(()), |()| TagArgs::None),
+    ))(i)
+}
+
 fn playlist_tag<'a>(i: &'a str) -> IResult<&'a str, Tag> {
-    terminated(pair(tag_name, opt(preceded(char(':'), attrs))), line_ending)(i)
-        .map(|(i, (name, attrs))| (i, Tag::Tag { name, attrs }))
+    map(
+        terminated(pair(tag_name, tag_args), line_ending),
+        |(name, args)| Tag { name, args },
+    )(i)
 }
 
 fn uri<'a>(i: &'a str) -> IResult<&'a str, &'a str> {
-    terminated(is_not(" \t\r\n"), line_ending)(i)
+    map(
+        tuple((not(char('#')), is_not(" \t\r\n"), line_ending)),
+        |((), uri, _crlf)| uri,
+    )(i)
 }
 
 fn playlist_line<'a>(i: &'a str) -> IResult<&'a str, Line<'a>> {
     alt((
-        map(line_ending, |t| Line::Blank),
+        map(line_ending, |_| Line::Blank),
         map(playlist_tag, |t| Line::Tag(t)),
-        map(comment, |c| Line::Comment),
+        map(comment, |_| Line::Comment),
         map(uri, |u| Line::Uri(u)),
     ))(i)
 }
@@ -183,7 +219,7 @@ mod test {
     #[test]
     fn parses_comment() {
         let input = "# EXTM3U\r\n";
-        assert_eq!(Ok(("\r\n", ())), comment(input));
+        assert_eq!(Ok(("", ())), comment(input));
     }
 
     #[test]
@@ -217,10 +253,10 @@ mod test {
 
     #[test]
     fn parses_hex_sequence() {
-        assert_eq!(Ok(("", vec![0x00])), hex_sequence("0x00"));
-        assert_eq!(Ok(("", vec![0x42])), hex_sequence("0x42"));
-        assert_eq!(Ok(("", vec![0x42])), hex_sequence("0X42"));
-        assert_eq!(Ok(("", vec![0x00, 0x01, 0x02])), hex_sequence("0x000102"));
+        assert_eq!(Ok(("", "00")), hex_sequence("0x00"));
+        assert_eq!(Ok(("", "42")), hex_sequence("0x42"));
+        assert_eq!(Ok(("", "42")), hex_sequence("0X42"));
+        assert_eq!(Ok(("", "000102")), hex_sequence("0x000102"));
     }
 
     #[test]
