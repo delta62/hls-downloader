@@ -12,7 +12,7 @@ use nom::{
 #[derive(Debug)]
 pub enum Line<'a> {
     Blank,
-    Tag(Tag<'a>),
+    Tag { name: &'a str, args: TagArgs<'a> },
     Comment,
     Uri(&'a str),
 }
@@ -45,14 +45,8 @@ impl<'a> Manifest<'a> {
     pub fn lines(&'a self) -> impl Iterator<Item = &'a Line<'a>> {
         self.lines
             .iter()
-            .filter(|line| matches!(line, Line::Tag(_) | Line::Uri(_)))
+            .filter(|line| matches!(line, Line::Tag { .. } | Line::Uri(_)))
     }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Resolution {
-    pub width: u64,
-    pub height: u64,
 }
 
 #[derive(Debug)]
@@ -62,7 +56,7 @@ pub enum AttributeValue<'a> {
     Float(f64),
     String(&'a str),
     Keyword(&'a str),
-    Resolution(Resolution),
+    Resolution { width: u64, height: u64 },
 }
 
 #[derive(Debug)]
@@ -144,17 +138,17 @@ fn enum_string(i: &str) -> IResult<&str, &str> {
     keyword1(i)
 }
 
-fn resolution(i: &str) -> IResult<&str, Resolution> {
+fn resolution(i: &str) -> IResult<&str, AttributeValue> {
     map(
         tuple((integer, char('x'), integer)),
-        |(width, _, height)| Resolution { width, height },
+        |(width, _, height)| AttributeValue::Resolution { width, height },
     )(i)
 }
 
 fn attr_val(i: &str) -> IResult<&str, AttributeValue> {
     alt((
         map(hex_sequence, AttributeValue::Hex),
-        map(resolution, AttributeValue::Resolution),
+        resolution,
         map(float, AttributeValue::Float),
         map(integer, AttributeValue::Integer),
         map(quoted_string, AttributeValue::String),
@@ -183,10 +177,10 @@ fn tag_args(i: &str) -> IResult<&str, TagArgs> {
     ))(i)
 }
 
-fn playlist_tag(i: &str) -> IResult<&str, Tag> {
+fn playlist_tag(i: &str) -> IResult<&str, Line> {
     map(
         terminated(pair(tag_name, tag_args), line_ending),
-        |(name, args)| Tag { name, args },
+        |(name, args)| Line::Tag { name, args },
     )(i)
 }
 
@@ -200,7 +194,7 @@ fn uri(i: &str) -> IResult<&str, &str> {
 fn playlist_line(i: &str) -> IResult<&str, Line> {
     alt((
         map(line_ending, |_| Line::Blank),
-        map(playlist_tag, Line::Tag),
+        playlist_tag,
         map(comment, |_| Line::Comment),
         map(uri, Line::Uri),
     ))(i)
@@ -272,26 +266,20 @@ mod test {
 
     #[test]
     fn parses_resolution() {
-        assert_eq!(
-            Ok((
-                "",
-                Resolution {
-                    width: 1024,
-                    height: 768
-                }
-            )),
-            resolution("1024x768")
-        );
+        assert!(matches!(
+            resolution("1024x768").unwrap().1,
+            AttributeValue::Resolution {
+                width: 1024,
+                height: 768
+            }
+        ));
 
-        assert_eq!(
-            Ok((
-                "",
-                Resolution {
-                    width: 0,
-                    height: 0
-                }
-            )),
-            resolution("0x0")
-        );
+        assert!(matches!(
+            resolution("0x0").unwrap().1,
+            AttributeValue::Resolution {
+                width: 0,
+                height: 0
+            }
+        ));
     }
 }
