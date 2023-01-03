@@ -1,20 +1,18 @@
-use lalrpop_util::lalrpop_mod;
-
-mod ast;
-lalrpop_mod!(pub hls);
-mod manifest;
+mod parser;
 
 fn main() {
     env_logger::init();
     log::info!("Hello world");
 
-    let manifest =
-        std::fs::read_to_string("/home/sam/src/dvr_clj/resources/1800_complete.m3u8").unwrap();
+    let manifest_path = std::env::args()
+        .nth(1)
+        .expect("please include a manifest path");
+
+    let manifest = std::fs::read_to_string(manifest_path).unwrap();
     let start_time = std::time::Instant::now();
-    let ast = hls::ManifestParser::new().parse(&manifest).unwrap();
-    let manifest = manifest::MediaManifest::from_ast(&ast);
+    let manifest = parser::Manifest::parse(manifest.as_str()).unwrap();
     let duration = std::time::Instant::now().duration_since(start_time);
 
-    println!("{:#?}", manifest.unwrap());
-    println!("{:#?}", duration);
+    println!("{:#?}", manifest);
+    println!("Parsed manifest in {:?}", duration);
 }

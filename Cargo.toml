@@ -2,15 +2,10 @@
 name = "dvr"
 version = "0.1.0"
 edition = "2021"
-build = "build.rs"
 
 [dependencies]
 chrono = "0.4.23"
 env_logger = "0.10.0"
 hex = "0.4.3"
-lalrpop-util = { version = "0.19.8", features = ["lexer"] }
 log = "0.4.17"
-regex = "1.7.0"
-
-[build-dependencies]
-lalrpop = "0.19.8"
+nom = "7.1.2"
