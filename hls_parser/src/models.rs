@@ -2,14 +2,6 @@ use crate::parser::all_tags;
 use nom::{error::Error, Finish};
 
 #[derive(Debug)]
-pub enum Line<'a> {
-    Blank,
-    Tag { name: &'a str, args: TagArgs<'a> },
-    Comment,
-    Uri(&'a str),
-}
-
-#[derive(Debug)]
 pub struct Manifest<'a> {
     lines: Vec<Line<'a>>,
 }
@@ -42,6 +34,25 @@ impl<'a> Manifest<'a> {
 }
 
 #[derive(Debug)]
+pub enum Line<'a> {
+    Blank,
+    Tag {
+        name: &'a str,
+        args: Option<TagArgs<'a>>,
+    },
+    Comment,
+    Uri(&'a str),
+}
+
+pub type Attributes<'a> = Vec<Attribute<'a>>;
+
+#[derive(Debug)]
+pub struct Attribute<'a> {
+    pub name: &'a str,
+    pub value: AttributeValue<'a>,
+}
+
+#[derive(Debug)]
 pub enum AttributeValue<'a> {
     Integer(u64),
     Hex(&'a str),
@@ -52,17 +63,8 @@ pub enum AttributeValue<'a> {
 }
 
 #[derive(Debug)]
-pub struct Attribute<'a> {
-    pub name: &'a str,
-    pub value: AttributeValue<'a>,
-}
-
-pub type Attributes<'a> = Vec<Attribute<'a>>;
-
-#[derive(Debug)]
 pub enum TagArgs<'a> {
     Attributes(Attributes<'a>),
     Integer(u64),
     String(&'a str),
-    None,
 }

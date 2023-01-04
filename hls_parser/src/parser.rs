@@ -93,15 +93,19 @@ fn attrs(i: &str) -> IResult<&str, Attributes> {
     separated_list1(char(','), attr)(i)
 }
 
-fn tag_args(i: &str) -> IResult<&str, TagArgs> {
+fn tag_args(i: &str) -> IResult<&str, Option<TagArgs>> {
     alt((
-        map(preceded(char(':'), attrs), TagArgs::Attributes),
+        map(preceded(char(':'), attrs), |attrs| {
+            Some(TagArgs::Attributes(attrs))
+        }),
         map(
             tuple((char(':'), integer, peek(line_ending))),
-            |(_, i, _)| TagArgs::Integer(i),
+            |(_, i, _)| Some(TagArgs::Integer(i)),
         ),
-        map(preceded(char(':'), is_not("\r\n")), TagArgs::String),
-        map(success(()), |()| TagArgs::None),
+        map(preceded(char(':'), is_not("\r\n")), |s| {
+            Some(TagArgs::String(s))
+        }),
+        map(success(()), |()| None),
     ))(i)
 }
 
