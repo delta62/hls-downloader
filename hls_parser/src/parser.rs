@@ -4,7 +4,7 @@ use nom::{
     bytes::complete::{is_not, tag, take_till, take_while},
     character::complete::{char, digit0, digit1, hex_digit1, line_ending, one_of},
     combinator::{map, not, opt, peek, recognize, success, value},
-    multi::{many1, separated_list1},
+    multi::{fold_many1, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     IResult,
 };
@@ -123,17 +123,26 @@ fn uri(i: &str) -> IResult<&str, &str> {
     )(i)
 }
 
-fn playlist_line(i: &str) -> IResult<&str, Line> {
+fn playlist_line(i: &str) -> IResult<&str, Option<Line>> {
     alt((
-        map(line_ending, |_| Line::Blank),
-        playlist_tag,
-        map(comment, |_| Line::Comment),
-        map(uri, Line::Uri),
+        map(line_ending, |_| None),
+        map(playlist_tag, Some),
+        map(comment, |_| None),
+        map(uri, |u| Some(Line::Uri(u))),
     ))(i)
 }
 
 pub fn all_tags(i: &str) -> IResult<&str, Vec<Line>> {
-    many1(playlist_line)(i)
+    fold_many1(
+        playlist_line,
+        || vec![],
+        |mut acc, line| {
+            if let Some(line) = line {
+                acc.push(line);
+            }
+            acc
+        },
+    )(i)
 }
 
 #[cfg(test)]

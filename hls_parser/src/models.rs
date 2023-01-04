@@ -35,12 +35,10 @@ impl<'a> Manifest<'a> {
 
 #[derive(Debug)]
 pub enum Line<'a> {
-    Blank,
     Tag {
         name: &'a str,
         args: Option<TagArgs<'a>>,
     },
-    Comment,
     Uri(&'a str),
 }
 
