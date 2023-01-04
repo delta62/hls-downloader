@@ -1,5 +1,5 @@
 use hls_parser::Attributes;
 
 pub trait FromAttrs {
-    fn from_attrs<'a>(input: &Attributes<'a>) -> Self;
+    fn from_attrs(input: &Attributes) -> Self;
 }

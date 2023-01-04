@@ -25,6 +25,9 @@ dependencies = [
 [[package]]
 name = "hls_manifest"
 version = "0.1.0"
+dependencies = [
+ "hls_parser",
+]
 
 [[package]]
 name = "hls_parser"

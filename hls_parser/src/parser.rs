@@ -133,16 +133,12 @@ fn playlist_line(i: &str) -> IResult<&str, Option<Line>> {
 }
 
 pub fn all_tags(i: &str) -> IResult<&str, Vec<Line>> {
-    fold_many1(
-        playlist_line,
-        || vec![],
-        |mut acc, line| {
-            if let Some(line) = line {
-                acc.push(line);
-            }
-            acc
-        },
-    )(i)
+    fold_many1(playlist_line, Vec::new, |mut acc, line| {
+        if let Some(line) = line {
+            acc.push(line);
+        }
+        acc
+    })(i)
 }
 
 #[cfg(test)]
