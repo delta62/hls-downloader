@@ -1,85 +1,13 @@
+use crate::models::{Attribute, AttributeValue, Attributes, Line, TagArgs};
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till, take_while},
     character::complete::{char, digit0, digit1, hex_digit1, line_ending, one_of},
     combinator::{map, not, opt, peek, recognize, success, value},
-    error::Error,
     multi::{many1, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
-    Finish, IResult,
+    IResult,
 };
-
-#[derive(Debug)]
-pub enum Line<'a> {
-    Blank,
-    Tag { name: &'a str, args: TagArgs<'a> },
-    Comment,
-    Uri(&'a str),
-}
-
-#[derive(Debug)]
-pub struct Manifest<'a> {
-    lines: Vec<Line<'a>>,
-}
-
-impl<'a> Manifest<'a> {
-    pub fn parse(s: &'a str) -> Result<Self, Error<String>> {
-        match all_tags(s).finish() {
-            Ok((remaining, lines)) => {
-                if !remaining.is_empty() {
-                    log::error!("Failed to parse! Next 3 lines:");
-                    for i in 0..3 {
-                        log::error!("{:?}", remaining.lines().nth(i));
-                    }
-                }
-
-                Ok(Self { lines })
-            }
-            Err(Error { input, code }) => Err(Error {
-                input: input.to_string(),
-                code,
-            }),
-        }
-    }
-
-    pub fn lines(&'a self) -> impl Iterator<Item = &'a Line<'a>> {
-        self.lines
-            .iter()
-            .filter(|line| matches!(line, Line::Tag { .. } | Line::Uri(_)))
-    }
-}
-
-#[derive(Debug)]
-pub enum AttributeValue<'a> {
-    Integer(u64),
-    Hex(&'a str),
-    Float(f64),
-    String(&'a str),
-    Keyword(&'a str),
-    Resolution { width: u64, height: u64 },
-}
-
-#[derive(Debug)]
-pub struct Attribute<'a> {
-    name: &'a str,
-    value: AttributeValue<'a>,
-}
-
-pub type Attributes<'a> = Vec<Attribute<'a>>;
-
-#[derive(Debug)]
-pub enum TagArgs<'a> {
-    Attributes(Attributes<'a>),
-    Integer(u64),
-    String(&'a str),
-    None,
-}
-
-#[derive(Debug)]
-pub struct Tag<'a> {
-    name: &'a str,
-    args: TagArgs<'a>,
-}
 
 fn keyword_start(i: &str) -> IResult<&str, char> {
     one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ")(i)
@@ -200,7 +128,7 @@ fn playlist_line(i: &str) -> IResult<&str, Line> {
     ))(i)
 }
 
-fn all_tags(i: &str) -> IResult<&str, Vec<Line>> {
+pub fn all_tags(i: &str) -> IResult<&str, Vec<Line>> {
     many1(playlist_line)(i)
 }
 
