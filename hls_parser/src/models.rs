@@ -34,6 +34,19 @@ impl<'a> Manifest<'a> {
 }
 
 #[derive(Debug)]
+pub struct HexSequence<'a>(&'a str);
+
+impl<'a> HexSequence<'a> {
+    pub fn new(data: &'a str) -> Self {
+        Self(data)
+    }
+
+    pub fn bytes(&self) -> Result<Vec<u8>, hex::FromHexError> {
+        hex::decode(self.0)
+    }
+}
+
+#[derive(Debug)]
 pub enum Line<'a> {
     Tag {
         name: &'a str,
@@ -53,7 +66,7 @@ pub struct Attribute<'a> {
 #[derive(Debug)]
 pub enum AttributeValue<'a> {
     Integer(u64),
-    Hex(&'a str),
+    Hex(HexSequence<'a>),
     Float(f64),
     String(&'a str),
     Keyword(&'a str),

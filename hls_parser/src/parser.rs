@@ -1,4 +1,4 @@
-use crate::models::{Attribute, AttributeValue, Attributes, Line, TagArgs};
+use crate::models::{Attribute, AttributeValue, Attributes, HexSequence, Line, TagArgs};
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till, take_while},
@@ -75,7 +75,7 @@ fn resolution(i: &str) -> IResult<&str, AttributeValue> {
 
 fn attr_val(i: &str) -> IResult<&str, AttributeValue> {
     alt((
-        map(hex_sequence, AttributeValue::Hex),
+        map(hex_sequence, |s| AttributeValue::Hex(HexSequence::new(s))),
         resolution,
         map(float, AttributeValue::Float),
         map(integer, AttributeValue::Integer),
