@@ -3,7 +3,7 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till, take_while},
     character::complete::{char, digit0, digit1, hex_digit1, line_ending, one_of},
-    combinator::{map, not, opt, peek, recognize, success, value},
+    combinator::{map, map_res, not, opt, peek, recognize, success, value},
     multi::{fold_many1, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     IResult,
@@ -36,18 +36,18 @@ fn dec_digit1(i: &str) -> IResult<&str, &str> {
 }
 
 fn integer(i: &str) -> IResult<&str, u64> {
-    map(dec_digit1, |s| s.parse::<u64>().unwrap())(i)
+    map_res(dec_digit1, |s| s.parse::<u64>())(i)
 }
 
 fn float(i: &str) -> IResult<&str, f64> {
-    map(
+    map_res(
         recognize(tuple((opt(char('-')), opt(dec_digit1), char('.'), digit1))),
-        |s| s.parse::<f64>().unwrap(),
+        |s| s.parse::<f64>(),
     )(i)
 }
 
 fn tag_name(i: &str) -> IResult<&str, &str> {
-    preceded(char('#'), recognize(pair(tag("EXT"), keyword1)))(i)
+    preceded(char('#'), recognize(pair(peek(tag("EXT")), keyword1)))(i)
 }
 
 fn hex_sequence(i: &str) -> IResult<&str, &str> {
@@ -96,10 +96,7 @@ fn attrs(i: &str) -> IResult<&str, Attributes> {
 }
 
 fn maybe_tag_args(i: &str) -> IResult<&str, Option<TagArgs>> {
-    alt((
-        map(preceded(char(':'), tag_args), Some),
-        map(success(()), |()| None),
-    ))(i)
+    opt(preceded(char(':'), tag_args))(i)
 }
 
 fn tag_args(i: &str) -> IResult<&str, TagArgs> {
