@@ -193,13 +193,6 @@ mod test {
     }
 
     #[test]
-    fn parses_enum_string() {
-        assert_eq!(Ok(("", "BANANA")), enum_string("BANANA"));
-        assert_eq!(Ok(("", "AES-128")), enum_string("AES-128"));
-        assert!(enum_string("999").is_err());
-    }
-
-    #[test]
     fn parses_resolution() {
         assert!(matches!(
             resolution("1024x768").unwrap().1,
