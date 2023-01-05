@@ -1,2 +1,2 @@
 [workspace]
-members = ["hls_parser", "hls_derive", "hls_manifest"]
+members = ["hls", "hls_parser", "hls_derive", "hls_manifest"]

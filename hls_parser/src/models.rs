@@ -3,7 +3,7 @@ use nom::{error::Error, Finish};
 
 #[derive(Debug)]
 pub struct Manifest<'a> {
-    lines: Vec<Line<'a>>,
+    pub lines: Vec<Line<'a>>,
 }
 
 impl<'a> Manifest<'a> {
@@ -24,12 +24,6 @@ impl<'a> Manifest<'a> {
                 code,
             }),
         }
-    }
-
-    pub fn lines(&'a self) -> impl Iterator<Item = &'a Line<'a>> {
-        self.lines
-            .iter()
-            .filter(|line| matches!(line, Line::Tag { .. } | Line::Uri(_)))
     }
 }
 

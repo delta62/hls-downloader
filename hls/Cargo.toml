@@ -1,0 +1,8 @@
+[package]
+name = "hls"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hls_derive = { path = "../hls_derive" }
+serde = { version = "1.0.152", features = ["derive"] }
