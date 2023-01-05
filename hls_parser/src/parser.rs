@@ -9,6 +9,8 @@ use nom::{
     IResult,
 };
 
+const WHITESPACE: &str = " \t\r\n";
+
 fn keyword_start(i: &str) -> IResult<&str, char> {
     one_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ")(i)
 }
@@ -34,16 +36,18 @@ fn dec_digit1(i: &str) -> IResult<&str, &str> {
 }
 
 fn integer(i: &str) -> IResult<&str, u64> {
-    dec_digit1(i).map(|(i, s)| (i, s.parse::<u64>().unwrap()))
+    map(dec_digit1, |s| s.parse::<u64>().unwrap())(i)
 }
 
 fn float(i: &str) -> IResult<&str, f64> {
-    recognize(tuple((opt(char('-')), opt(dec_digit1), char('.'), digit1)))(i)
-        .map(|(i, s)| (i, s.parse::<f64>().unwrap()))
+    map(
+        recognize(tuple((opt(char('-')), opt(dec_digit1), char('.'), digit1))),
+        |s| s.parse::<f64>().unwrap(),
+    )(i)
 }
 
 fn tag_name(i: &str) -> IResult<&str, &str> {
-    preceded(char('#'), keyword1)(i)
+    preceded(char('#'), recognize(pair(tag("EXT"), keyword1)))(i)
 }
 
 fn hex_sequence(i: &str) -> IResult<&str, &str> {
@@ -56,20 +60,16 @@ fn comment(i: &str) -> IResult<&str, ()> {
         tuple((
             char('#'),
             not(tag("EXT")),
-            take_till(|c| "\r\n".contains(c)),
+            take_till(|c| WHITESPACE.contains(c)),
             line_ending,
         )),
     )(i)
 }
 
-fn enum_string(i: &str) -> IResult<&str, &str> {
-    keyword1(i)
-}
-
 fn resolution(i: &str) -> IResult<&str, AttributeValue> {
     map(
-        tuple((integer, char('x'), integer)),
-        |(width, _, height)| AttributeValue::Resolution { width, height },
+        separated_pair(integer, char('x'), integer),
+        |(width, height)| AttributeValue::Resolution { width, height },
     )(i)
 }
 
@@ -80,47 +80,45 @@ fn attr_val(i: &str) -> IResult<&str, AttributeValue> {
         map(float, AttributeValue::Float),
         map(integer, AttributeValue::Integer),
         map(quoted_string, AttributeValue::String),
-        map(enum_string, AttributeValue::Keyword),
+        map(keyword1, AttributeValue::Keyword),
     ))(i)
 }
 
 fn attr(i: &str) -> IResult<&str, Attribute> {
-    separated_pair(keyword1, char('='), attr_val)(i)
-        .map(|(i, (name, value))| (i, Attribute { name, value }))
+    map(
+        separated_pair(keyword1, char('='), attr_val),
+        |(name, value)| Attribute { name, value },
+    )(i)
 }
 
 fn attrs(i: &str) -> IResult<&str, Attributes> {
     separated_list1(char(','), attr)(i)
 }
 
-fn tag_args(i: &str) -> IResult<&str, Option<TagArgs>> {
+fn maybe_tag_args(i: &str) -> IResult<&str, Option<TagArgs>> {
     alt((
-        map(preceded(char(':'), attrs), |attrs| {
-            Some(TagArgs::Attributes(attrs))
-        }),
-        map(
-            tuple((char(':'), integer, peek(line_ending))),
-            |(_, i, _)| Some(TagArgs::Integer(i)),
-        ),
-        map(preceded(char(':'), is_not("\r\n")), |s| {
-            Some(TagArgs::String(s))
-        }),
+        map(preceded(char(':'), tag_args), Some),
         map(success(()), |()| None),
+    ))(i)
+}
+
+fn tag_args(i: &str) -> IResult<&str, TagArgs> {
+    alt((
+        map(attrs, TagArgs::Attributes),
+        map(terminated(integer, peek(line_ending)), TagArgs::Integer),
+        map(is_not(WHITESPACE), TagArgs::String),
     ))(i)
 }
 
 fn playlist_tag(i: &str) -> IResult<&str, Line> {
     map(
-        terminated(pair(tag_name, tag_args), line_ending),
+        terminated(pair(tag_name, maybe_tag_args), line_ending),
         |(name, args)| Line::Tag { name, args },
     )(i)
 }
 
 fn uri(i: &str) -> IResult<&str, &str> {
-    map(
-        tuple((not(char('#')), is_not(" \t\r\n"), line_ending)),
-        |((), uri, _crlf)| uri,
-    )(i)
+    preceded(not(char('#')), terminated(is_not(WHITESPACE), line_ending))(i)
 }
 
 fn playlist_line(i: &str) -> IResult<&str, Option<Line>> {
