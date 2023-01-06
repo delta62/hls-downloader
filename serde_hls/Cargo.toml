@@ -1,5 +1,5 @@
 [package]
-name = "hls_derive"
+name = "serde_hls"
 version = "0.1.0"
 edition = "2021"
 

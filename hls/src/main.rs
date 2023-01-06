@@ -33,6 +33,6 @@ enum Line<'a> {
 fn main() {
     let path = std::env::args().nth(1).expect("Expected manifest to parse");
     let input = std::fs::read_to_string(path).unwrap();
-    let manifest: Vec<Line> = hls_derive::from_str(input.as_str()).unwrap();
+    let manifest: Vec<Line> = serde_hls::from_str(input.as_str()).unwrap();
     println!("{:?}", manifest);
 }

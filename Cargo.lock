@@ -18,17 +18,8 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 name = "hls"
 version = "0.1.0"
 dependencies = [
- "hls_derive",
  "serde",
-]
-
-[[package]]
-name = "hls_derive"
-version = "0.1.0"
-dependencies = [
- "hls_parser",
- "serde",
- "syn",
+ "serde_hls",
 ]
 
 [[package]]
@@ -113,6 +104,15 @@ checksum = "af487d118eecd09402d70a5d72551860e788df87b464af30e5ea6a38c75c541e"
 dependencies = [
  "proc-macro2",
  "quote",
+ "syn",
+]
+
+[[package]]
+name = "serde_hls"
+version = "0.1.0"
+dependencies = [
+ "hls_parser",
+ "serde",
  "syn",
 ]
 
