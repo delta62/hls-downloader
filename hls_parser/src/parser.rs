@@ -3,7 +3,7 @@ use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till, take_while},
     character::complete::{char, digit0, digit1, hex_digit1, line_ending, one_of},
-    combinator::{map, map_res, not, opt, peek, recognize, success, value},
+    combinator::{map, map_res, not, opt, peek, recognize, value},
     multi::{fold_many1, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     IResult,
@@ -47,7 +47,13 @@ fn float(i: &str) -> IResult<&str, f64> {
 }
 
 fn tag_name(i: &str) -> IResult<&str, &str> {
-    preceded(char('#'), recognize(pair(peek(tag("EXT")), keyword1)))(i)
+    preceded(
+        char('#'),
+        preceded(
+            tag("EXT"),
+            preceded(opt(char('-')), take_while(keyword_char)),
+        ),
+    )(i)
 }
 
 fn hex_sequence(i: &str) -> IResult<&str, &str> {

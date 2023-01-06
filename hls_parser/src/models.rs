@@ -2,8 +2,24 @@ use crate::parser::all_tags;
 use nom::{error::Error, Finish};
 
 #[derive(Debug)]
+pub enum Node<'a> {
+    AttributeName(&'a str),
+    AttributesEnd,
+    AttributesStart,
+    AttributeValue(AttributeValue<'a>),
+    Integer(u64),
+    ManifestEnd,
+    ManifestStart,
+    String(&'a str),
+    TagEnd,
+    TagName(&'a str),
+    TagStart,
+    Uri(&'a str),
+}
+
+#[derive(Debug)]
 pub struct Manifest<'a> {
-    pub lines: Vec<Line<'a>>,
+    lines: Vec<Line<'a>>,
 }
 
 impl<'a> Manifest<'a> {
@@ -24,6 +40,48 @@ impl<'a> Manifest<'a> {
                 code,
             }),
         }
+    }
+
+    pub fn lines(&self) -> &[Line] {
+        self.lines.as_slice()
+    }
+
+    pub fn nodes(self) -> Vec<Node<'a>> {
+        let mut ret = vec![Node::ManifestStart];
+
+        // println!("{:#?}", self.lines);
+
+        for line in self.lines {
+            match line {
+                Line::Tag { name, args } => {
+                    ret.push(Node::TagStart);
+                    ret.push(Node::TagName(name));
+
+                    match args {
+                        Some(TagArgs::Attributes(attrs)) => {
+                            ret.push(Node::AttributesStart);
+                            for attr in attrs {
+                                ret.push(Node::AttributeName(attr.name));
+                                ret.push(Node::AttributeValue(attr.value));
+                            }
+                            ret.push(Node::AttributesEnd);
+                        }
+                        Some(TagArgs::String(s)) => ret.push(Node::String(s)),
+                        Some(TagArgs::Integer(i)) => ret.push(Node::Integer(i)),
+                        None => {}
+                    }
+
+                    ret.push(Node::TagEnd);
+                }
+                Line::Uri(uri) => {
+                    ret.push(Node::Uri(uri));
+                }
+            }
+        }
+
+        ret.push(Node::ManifestEnd);
+
+        ret
     }
 }
 
