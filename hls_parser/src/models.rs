@@ -71,7 +71,7 @@ impl<'a> Manifest<'a> {
                         None => {}
                     }
 
-                    ret.push(Node::TagEnd);
+                    // ret.push(Node::TagEnd);
                 }
                 Line::Uri(uri) => {
                     ret.push(Node::Uri(uri));

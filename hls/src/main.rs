@@ -22,6 +22,7 @@ enum Tag<'a> {
     IndependentSegments,
     #[serde(borrow)]
     Media(MediaAttributes<'a>),
+    Version(u64),
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,5 +35,5 @@ fn main() {
     let path = std::env::args().nth(1).expect("Expected manifest to parse");
     let input = std::fs::read_to_string(path).unwrap();
     let manifest: Vec<Line> = serde_hls::from_str(input.as_str()).unwrap();
-    println!("{:?}", manifest);
+    println!("{:#?}", manifest);
 }

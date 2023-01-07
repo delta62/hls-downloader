@@ -51,7 +51,7 @@ fn tag_name(i: &str) -> IResult<&str, &str> {
         char('#'),
         preceded(
             tag("EXT"),
-            preceded(opt(char('-')), take_while(keyword_char)),
+            preceded(opt(tag("-X-")), take_while(keyword_char)),
         ),
     )(i)
 }
