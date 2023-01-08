@@ -60,6 +60,8 @@ enum Tag<'a> {
     Version(u64),
     PlaylistType(PlaylistType),
     ProgramDateTime(String),
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Deserialize)]
