@@ -1,4 +1,6 @@
 mod models;
 mod parser;
 
-pub use models::{Attribute, AttributeValue, Attributes, Line, Manifest, Node, TagArgs};
+pub use models::{
+    Attribute, AttributeValue, Attributes, HexSequence, Line, Manifest, Node, TagArgs,
+};

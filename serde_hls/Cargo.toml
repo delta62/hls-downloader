@@ -7,3 +7,4 @@ edition = "2021"
 serde = "1.0.152"
 syn = "1.0.107"
 hls_parser = { path = "../hls_parser" }
+log = "0.4.17"
