@@ -8,6 +8,7 @@ pub enum Node<'a> {
     AttributesEnd,
     AttributesStart,
     AttributeValue(AttributeValue<'a>),
+    Float(f64),
     Integer(u64),
     ManifestEnd,
     ManifestStart,
@@ -69,6 +70,7 @@ impl<'a> Manifest<'a> {
                         }
                         Some(TagArgs::String(s)) => ret.push(Node::String(s)),
                         Some(TagArgs::Integer(i)) => ret.push(Node::Integer(i)),
+                        Some(TagArgs::Float(f)) => ret.push(Node::Float(f)),
                         None => {}
                     }
 
@@ -129,6 +131,7 @@ pub enum AttributeValue<'a> {
 #[derive(Debug)]
 pub enum TagArgs<'a> {
     Attributes(Attributes<'a>),
+    Float(f64),
     Integer(u64),
     String(&'a str),
 }

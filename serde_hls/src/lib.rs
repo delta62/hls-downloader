@@ -32,6 +32,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 enum Context {
     Attributes,
     EnumAttribute,
+    FloatAttribute,
     Manifest,
     Tag,
     TagName,
@@ -106,6 +107,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 self.next()?;
                 match self.peek()? {
                     Node::Integer(_) => self.context = Context::IntAttribute,
+                    Node::Float(_) => self.context = Context::FloatAttribute,
                     Node::String(_) => self.context = Context::StringAttribute,
                     Node::AttributesStart => self.context = Context::Attributes,
                     _ => self.context = Context::Manifest,
@@ -114,6 +116,12 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             }
             (Context::IntAttribute, Node::Integer(i)) => {
                 let res = visitor.visit_u64(*i)?;
+                self.context = Context::Manifest;
+                self.next()?;
+                Ok(res)
+            }
+            (Context::FloatAttribute, Node::Float(f)) => {
+                let res = visitor.visit_f64(*f)?;
                 self.context = Context::Manifest;
                 self.next()?;
                 Ok(res)

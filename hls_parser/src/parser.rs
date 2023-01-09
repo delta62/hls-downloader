@@ -90,7 +90,6 @@ fn attr_val(i: &str) -> IResult<&str, AttributeValue> {
     alt((
         map(hex_sequence, |s| AttributeValue::Hex(HexSequence::new(s))),
         resolution,
-        map(duration_name, AttributeValue::Float),
         map(float, AttributeValue::Float),
         map(integer, AttributeValue::Integer),
         map(quoted_string, AttributeValue::String),
@@ -115,6 +114,7 @@ fn maybe_tag_args(i: &str) -> IResult<&str, Option<TagArgs>> {
 
 fn tag_args(i: &str) -> IResult<&str, TagArgs> {
     alt((
+        map(duration_name, TagArgs::Float),
         map(attrs, TagArgs::Attributes),
         map(terminated(integer, peek(line_ending)), TagArgs::Integer),
         map(is_not(WHITESPACE), TagArgs::String),

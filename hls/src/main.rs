@@ -48,7 +48,7 @@ struct KeyAttributes {
 enum Tag<'a> {
     M3u,
     IndependentSegments,
-    Inf(String),
+    Inf(f64),
     Key(KeyAttributes),
     #[serde(borrow)]
     Media(MediaAttributes<'a>),
