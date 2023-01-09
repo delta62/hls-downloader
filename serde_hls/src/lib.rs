@@ -68,13 +68,12 @@ impl<'de> Deserializer<'de> {
         self.nodes.get(self.next_index).ok_or(Error::UnexpectedEof)
     }
 
-    fn take1(&mut self) -> Result<&Node> {
-        let ret = self
-            .nodes
+    fn next(&mut self) -> Result<()> {
+        self.nodes
             .get(self.next_index)
             .ok_or(Error::UnexpectedEof)?;
         self.next_index += 1;
-        Ok(ret)
+        Ok(())
     }
 }
 
@@ -85,84 +84,86 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        log::debug!("[{:?}] {:?}", self.context, self.peek().unwrap());
+        log::debug!("[{:?}] {:?}", self.context, self.peek()?);
 
-        match (self.context, self.peek().unwrap()) {
+        match (self.context, self.peek()?) {
             (Context::Manifest, Node::ManifestStart) => {
-                self.take1()?;
+                self.next()?;
                 visitor.visit_seq(Lines::new(self))
             }
             (Context::Manifest, Node::TagStart) => visitor.visit_enum(TagLine::new(self)),
             (Context::Tag, Node::TagStart) => {
-                self.take1()?;
-                visitor.visit_str("Tag")
+                self.next()?;
+                visitor.visit_borrowed_str("Tag")
             }
             (Context::Tag, Node::TagName(_)) => {
                 self.context = Context::TagName;
                 visitor.visit_enum(TagName::new(self))
             }
-            (Context::TagName, Node::TagName(_)) => {
-                if let Node::TagName(s) = self.peek().unwrap() {
-                    let res = visitor.visit_str(s);
-                    self.take1().unwrap();
-                    let next = self.peek().unwrap();
-                    match next {
-                        Node::Integer(_) => self.context = Context::IntAttribute,
-                        Node::String(_) => self.context = Context::StringAttribute,
-                        Node::AttributesStart => self.context = Context::Attributes,
-                        _ => self.context = Context::Manifest,
-                    }
-                    res
-                } else {
-                    unreachable!()
+            (Context::TagName, Node::TagName(s)) => {
+                let res = visitor.visit_str(s)?;
+                self.next()?;
+                match self.peek()? {
+                    Node::Integer(_) => self.context = Context::IntAttribute,
+                    Node::String(_) => self.context = Context::StringAttribute,
+                    Node::AttributesStart => self.context = Context::Attributes,
+                    _ => self.context = Context::Manifest,
                 }
+                Ok(res)
             }
             (Context::IntAttribute, Node::Integer(i)) => {
                 let res = visitor.visit_u64(*i)?;
                 self.context = Context::Manifest;
-                self.take1()?;
+                self.next()?;
                 Ok(res)
             }
             (Context::StringAttribute, Node::String(s)) => {
                 let res = visitor.visit_str(s)?;
                 self.context = Context::Manifest;
-                self.take1()?;
+                self.next()?;
                 Ok(res)
             }
             (Context::EnumAttribute, Node::String(s)) => {
                 let res = visitor.visit_str(s)?;
                 self.context = Context::Manifest;
-                self.take1()?;
+                self.next()?;
                 Ok(res)
             }
             (Context::Attributes, Node::AttributesStart) => {
-                self.take1()?;
+                self.next()?;
                 visitor.visit_map(Attributes::new(self))
             }
             (Context::Attributes, Node::AttributeName(s)) => {
                 let res = visitor.visit_str(s)?;
-                self.take1()?;
+                self.next()?;
                 Ok(res)
             }
             (Context::Attributes, Node::AttributeValue(v)) => {
                 let res = match v {
                     AttributeValue::Integer(i) => {
                         let res = visitor.visit_u64(*i)?;
-                        self.take1()?;
+                        self.next()?;
                         Ok(res)
                     }
                     AttributeValue::String(s) => {
                         let res = visitor.visit_str(s)?;
-                        self.take1()?;
+                        self.next()?;
                         Ok(res)
                     }
                     AttributeValue::Keyword(_) => visitor.visit_enum(AttrEnum::new(self)),
                     AttributeValue::Hex(_) => {
                         let res = visitor.visit_unit()?;
-                        self.take1()?;
+                        self.next()?;
                         Ok(res)
                     }
-                    _ => todo!("no match for attr"),
+                    AttributeValue::Float(f) => {
+                        let res = visitor.visit_f64(*f)?;
+                        self.next()?;
+                        Ok(res)
+                    }
+                    AttributeValue::Resolution { .. } => {
+                        todo!()
+                    }
                 };
 
                 res
@@ -170,11 +171,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             (Context::EnumAttribute, Node::AttributeValue(v)) => {
                 if let AttributeValue::Keyword(s) = v {
                     let res = visitor.visit_str(s)?;
-                    self.take1()?;
+                    self.next()?;
                     self.context = Context::Attributes;
                     Ok(res)
                 } else {
-                    Err(Error::Message("invalid state".to_string()))
+                    unreachable!()
                 }
             }
             (Context::Manifest, Node::Uri(_)) => visitor.visit_enum(UriLine::new(self)),
@@ -185,11 +186,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             }
             (Context::Uri, Node::Uri(u)) => {
                 let res = visitor.visit_str(u)?;
-                self.take1()?;
+                self.next()?;
                 self.context = Context::Manifest;
                 Ok(res)
             }
-            _ => todo!("ctx, next pair not implemented"),
+            _ => unreachable!(),
         }
     }
 
@@ -202,7 +203,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        match self.peek().unwrap() {
+        match self.peek()? {
             Node::String(_) => {
                 self.context = Context::EnumAttribute;
                 visitor.visit_enum(AttrEnum::new(self))
@@ -247,10 +248,8 @@ impl<'de, 'a> SeqAccess<'de> for Lines<'a, 'de> {
         T: de::DeserializeSeed<'de>,
     {
         if let Node::ManifestEnd = self.de.peek()? {
-            log::info!("done with seq");
             Ok(None)
         } else {
-            log::info!("continuing thru seq");
             seed.deserialize(&mut *self.de).map(Some)
         }
     }
@@ -442,7 +441,7 @@ impl<'a, 'de> MapAccess<'de> for Attributes<'a, 'de> {
     {
         match self.de.peek()? {
             Node::AttributesEnd => {
-                self.de.take1()?;
+                self.de.next()?;
                 self.de.context = Context::Manifest;
                 Ok(None)
             }
@@ -476,9 +475,7 @@ impl<'de, 'a> EnumAccess<'de> for UriLine<'a, 'de> {
     where
         V: de::DeserializeSeed<'de>,
     {
-        log::info!("uri variant seed");
         self.de.context = Context::Tag;
-        //self.de.take1()?;
         let val = seed.deserialize(&mut *self.de)?;
         Ok((val, self))
     }
@@ -502,7 +499,6 @@ impl<'de, 'a> VariantAccess<'de> for UriLine<'a, 'de> {
     where
         T: de::DeserializeSeed<'de>,
     {
-        log::info!("uri newtype variant seed");
         seed.deserialize(self.de)
     }
 
