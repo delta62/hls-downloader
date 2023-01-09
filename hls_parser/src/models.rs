@@ -1,5 +1,6 @@
 use crate::parser::all_tags;
 use nom::{error::Error, Finish};
+use serde::Deserialize;
 
 #[derive(Debug)]
 pub enum Node<'a> {
@@ -85,7 +86,7 @@ impl<'a> Manifest<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct HexSequence<'a>(&'a str);
 
 impl<'a> HexSequence<'a> {

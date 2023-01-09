@@ -7,6 +7,7 @@ use std::fmt::Display;
 pub enum Error {
     Message(String),
     Syntax,
+    InvalidHex,
     TrailingCharacters,
     UnexpectedEof,
 }
@@ -151,8 +152,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                         Ok(res)
                     }
                     AttributeValue::Keyword(_) => visitor.visit_enum(AttrEnum::new(self)),
-                    AttributeValue::Hex(_) => {
-                        let res = visitor.visit_unit()?;
+                    AttributeValue::Hex(s) => {
+                        let bytes = s.bytes().map_err(|_| Error::InvalidHex)?;
+                        let res = visitor.visit_byte_buf(bytes)?;
                         self.next()?;
                         Ok(res)
                     }

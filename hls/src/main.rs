@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use std::marker::PhantomData;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "SCREAMING-KEBAB-CASE")]
@@ -35,12 +34,11 @@ enum EncryptionMethod {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "SCREAMING-KEBAB-CASE")]
-struct KeyAttributes<'a> {
+struct KeyAttributes {
     method: EncryptionMethod,
-    #[serde(skip)]
-    _lifetime: PhantomData<&'a ()>,
     uri: Option<String>,
-    // iv: Option<HexSequence<'a>>,
+    #[serde(with = "serde_bytes")]
+    iv: Option<Vec<u8>>,
     keyformat: Option<String>,
     keyformatversions: Option<String>,
 }
@@ -51,8 +49,7 @@ enum Tag<'a> {
     M3u,
     IndependentSegments,
     Inf(String),
-    #[serde(borrow)]
-    Key(KeyAttributes<'a>),
+    Key(KeyAttributes),
     #[serde(borrow)]
     Media(MediaAttributes<'a>),
     MediaSequence(u64),
