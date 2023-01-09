@@ -60,13 +60,20 @@ fn hex_sequence(i: &str) -> IResult<&str, &str> {
     preceded(alt((tag("0x"), tag("0X"))), hex_digit1)(i)
 }
 
+fn duration_name(i: &str) -> IResult<&str, f64> {
+    terminated(
+        terminated(float, char(',')),
+        take_till(|c| "\r\n".contains(c)),
+    )(i)
+}
+
 fn comment(i: &str) -> IResult<&str, ()> {
     value(
         (),
         tuple((
             char('#'),
             not(tag("EXT")),
-            take_till(|c| WHITESPACE.contains(c)),
+            take_till(|c| "\r\n".contains(c)),
             line_ending,
         )),
     )(i)
@@ -83,6 +90,7 @@ fn attr_val(i: &str) -> IResult<&str, AttributeValue> {
     alt((
         map(hex_sequence, |s| AttributeValue::Hex(HexSequence::new(s))),
         resolution,
+        map(duration_name, AttributeValue::Float),
         map(float, AttributeValue::Float),
         map(integer, AttributeValue::Integer),
         map(quoted_string, AttributeValue::String),
@@ -149,7 +157,7 @@ mod test {
     #[test]
     fn parses_header_tag() {
         let input = "#EXTM3U";
-        assert_eq!(Ok(("", "EXTM3U")), tag_name(input));
+        assert_eq!(Ok(("", "M3U")), tag_name(input));
     }
 
     #[test]
@@ -165,12 +173,24 @@ mod test {
     }
 
     #[test]
+    fn parses_duration_name() {
+        // This is a special case for EXTINF, which has an unusal arg format of <float>,[name]
+        assert_eq!(Ok(("", 12.345)), duration_name("12.345,"));
+        assert_eq!(Ok(("", 12.345)), duration_name("12.345,SegmentName"));
+        assert_eq!(Ok(("", 12.345)), duration_name("12.345,The rain in Spain"));
+        // Trailing comma is required
+        assert!(duration_name("12.345").is_err());
+    }
+
+    #[test]
     fn parses_decimal_integer() {
         assert_eq!(Ok(("", 42)), integer("42"));
         assert_eq!(Ok(("", 0)), integer("0"));
         assert_eq!(Ok(("07", 0)), integer("007"));
         assert_eq!(Ok(("123", 0)), integer("0123"));
-        // assert!(integer("184467440737095516151").is_err());
+        // overflow
+        assert!(integer("184467440737095516151").is_err());
+        assert!(integer("-1").is_err());
         assert!(integer("").is_err());
     }
 
