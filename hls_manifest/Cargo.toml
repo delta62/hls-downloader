@@ -1,7 +1,0 @@
-[package]
-name = "hls_manifest"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-hls_parser = { path = "../hls_parser" }

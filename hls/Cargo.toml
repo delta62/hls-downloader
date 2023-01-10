@@ -4,9 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-hls_parser = { path = "../hls_parser" }
-serde_hls = { path = "../serde_hls" }
 serde = { version = "1.0.152", features = ["derive"] }
-env_logger = "0.10.0"
-log = "0.4.17"
 serde_bytes = "0.11.8"
+log = "0.4.17"
+nom = "7.1.2"
+hex = "0.4.3"

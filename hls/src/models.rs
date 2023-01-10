@@ -13,7 +13,6 @@ pub enum Node<'a> {
     ManifestEnd,
     ManifestStart,
     String(&'a str),
-    TagEnd,
     TagName(&'a str),
     TagStart,
     Uri(&'a str),
@@ -44,14 +43,8 @@ impl<'a> Manifest<'a> {
         }
     }
 
-    pub fn lines(&self) -> &[Line] {
-        self.lines.as_slice()
-    }
-
     pub fn nodes(self) -> Vec<Node<'a>> {
         let mut ret = vec![Node::ManifestStart];
-
-        // println!("{:#?}", self.lines);
 
         for line in self.lines {
             match line {
