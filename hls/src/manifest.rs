@@ -17,10 +17,43 @@ pub enum PlaylistType {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "SCREAMING-KEBAB-CASE")]
+pub enum HdcpLevel {
+    None,
+    Type0,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "SCREAMING-KEBAB-CASE")]
 pub struct MediaAttributes<'a> {
-    #[serde(rename = "type")]
+    #[serde(rename = "TYPE")]
     pub media_type: MediaType,
     pub uri: Option<&'a str>,
+    pub group_id: String,
+    pub language: Option<String>,
+    pub assoc_language: Option<String>,
+    pub name: String,
+    pub default: Option<bool>,
+    pub autoselect: Option<bool>,
+    pub forced: Option<bool>,
+    pub instream_id: Option<String>,
+    pub characteristics: Option<String>,
+    pub channels: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "SCREAMING-KEBAB-CASE")]
+pub struct StreamInfAttributes {
+    pub bandwidth: u64,
+    pub average_bandwidth: Option<u64>,
+    pub codecs: Option<String>,
+    pub resolution: Option<String>,
+    pub frame_rate: Option<f64>,
+    pub hdcp_level: Option<HdcpLevel>,
+    pub audio: Option<String>,
+    pub video: Option<String>,
+    pub subtitles: Option<String>,
+    pub closed_captions: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -57,6 +90,7 @@ pub enum Tag<'a> {
     Version(u64),
     PlaylistType(PlaylistType),
     ProgramDateTime(String),
+    StreamInf(StreamInfAttributes),
     #[serde(other)]
     Unknown,
 }

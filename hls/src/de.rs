@@ -5,6 +5,7 @@ use serde::{self, forward_to_deserialize_any};
 
 #[derive(Clone, Copy, Debug)]
 enum Context {
+    AttributeName,
     Attributes,
     EnumAttribute,
     FloatAttribute,
@@ -29,16 +30,16 @@ pub struct Deserializer<'de> {
 }
 
 impl<'de> Deserializer<'de> {
-    pub fn from_str(input: &'de str) -> Self {
-        let manifest = Manifest::parse(input).unwrap();
+    pub fn from_str(input: &'de str) -> Result<Self> {
+        let manifest = Manifest::parse(input).map_err(|_| Error::Syntax)?;
         let nodes = manifest.nodes();
         let next_index = 0;
 
-        Self {
+        Ok(Self {
             next_index,
             nodes,
             context: Default::default(),
-        }
+        })
     }
 
     fn peek(&self) -> Result<&Node> {
@@ -46,6 +47,7 @@ impl<'de> Deserializer<'de> {
     }
 
     fn next(&mut self) -> Result<()> {
+        log::debug!(" --- next --- ");
         self.nodes
             .get(self.next_index)
             .ok_or(Error::UnexpectedEof)?;
@@ -64,10 +66,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         log::debug!("[{:?}] {:?}", self.context, self.peek()?);
 
         match (self.context, self.peek()?) {
-            (Context::Manifest, Node::ManifestStart) => {
-                self.next()?;
-                visitor.visit_seq(Lines::new(self))
-            }
             (Context::Manifest, Node::TagStart) => visitor.visit_enum(TagLine::new(self)),
             (Context::Tag, Node::TagStart) => {
                 self.next()?;
@@ -113,51 +111,62 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 self.next()?;
                 Ok(res)
             }
-            (Context::Attributes, Node::AttributesStart) => {
-                self.next()?;
-                visitor.visit_map(Attributes::new(self))
-            }
-            (Context::Attributes, Node::AttributeName(s)) => {
+            (Context::AttributeName, Node::AttributeName(s)) => {
                 let res = visitor.visit_str(s)?;
                 self.next()?;
                 Ok(res)
             }
-            (Context::Attributes, Node::AttributeValue(v)) => {
-                let res = match v {
-                    AttributeValue::Integer(i) => {
-                        let res = visitor.visit_u64(*i)?;
-                        self.next()?;
-                        Ok(res)
-                    }
-                    AttributeValue::String(s) => {
-                        let res = visitor.visit_str(s)?;
-                        self.next()?;
-                        Ok(res)
-                    }
-                    AttributeValue::Keyword(_) => visitor.visit_enum(AttrEnum::new(self)),
-                    AttributeValue::Hex(s) => {
-                        let bytes = s.bytes().map_err(|_| Error::InvalidHex)?;
-                        let res = visitor.visit_byte_buf(bytes)?;
-                        self.next()?;
-                        Ok(res)
-                    }
-                    AttributeValue::Float(f) => {
-                        let res = visitor.visit_f64(*f)?;
-                        self.next()?;
-                        Ok(res)
-                    }
-                    AttributeValue::Resolution { .. } => {
-                        todo!()
-                    }
-                };
-
-                res
+            (Context::Attributes, Node::AttributesStart) => {
+                self.next()?;
+                visitor.visit_map(Attributes::new(self))
             }
+            (Context::Attributes, Node::AttributeValue(v)) => match v {
+                AttributeValue::Integer(i) => {
+                    let res = visitor.visit_u64(*i)?;
+                    self.next()?;
+                    Ok(res)
+                }
+                AttributeValue::String(s) => {
+                    let res = visitor.visit_str(s)?;
+                    self.next()?;
+                    Ok(res)
+                }
+                AttributeValue::Keyword(k) => match *k {
+                    "YES" => {
+                        self.next()?;
+                        visitor.visit_bool(true)
+                    }
+                    "NO" => {
+                        self.next()?;
+                        visitor.visit_bool(false)
+                    }
+                    s => {
+                        let res = visitor.visit_str(s);
+                        self.next()?;
+                        res
+                    }
+                },
+                AttributeValue::Hex(s) => {
+                    let bytes = s.bytes().map_err(|_| Error::InvalidHex)?;
+                    let res = visitor.visit_byte_buf(bytes)?;
+                    self.next()?;
+                    Ok(res)
+                }
+                AttributeValue::Float(f) => {
+                    let res = visitor.visit_f64(*f)?;
+                    self.next()?;
+                    Ok(res)
+                }
+                AttributeValue::Resolution { width, height } => {
+                    let res = visitor.visit_string(format!("{}x{}", width, height))?;
+                    self.next()?;
+                    Ok(res)
+                }
+            },
             (Context::EnumAttribute, Node::AttributeValue(v)) => {
                 if let AttributeValue::Keyword(s) = v {
                     let res = visitor.visit_str(s)?;
                     self.next()?;
-                    self.context = Context::Attributes;
                     Ok(res)
                 } else {
                     unreachable!()
@@ -179,6 +188,21 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         }
     }
 
+    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        match self.peek()? {
+            Node::AttributeValue(AttributeValue::Integer(i)) => {
+                let res = visitor.visit_u64(*i)?;
+                self.next()?;
+                Ok(res)
+            }
+            Node::Integer(_) => self.deserialize_any(visitor),
+            _ => todo!(),
+        }
+    }
+
     fn deserialize_enum<V>(
         self,
         _name: &'static str,
@@ -188,8 +212,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
+        log::debug!("deserialize_enum {:?}", self.peek()?);
         match self.peek()? {
-            Node::String(_) => {
+            Node::String(_) | Node::AttributeValue(AttributeValue::Keyword(_)) => {
                 self.context = Context::EnumAttribute;
                 visitor.visit_enum(AttrEnum::new(self))
             }
@@ -201,6 +226,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
+        log::debug!("option");
         if let Node::AttributeValue(_) = self.peek()? {
             visitor.visit_some(self)
         } else {
@@ -208,9 +234,21 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         }
     }
 
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        if let Node::ManifestStart = self.peek()? {
+            self.next()?;
+            visitor.visit_seq(Lines::new(self))
+        } else {
+            unreachable!("Only manifests support sequential access");
+        }
+    }
+
     forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        bytes byte_buf unit unit_struct newtype_struct seq tuple
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u128 f32 f64 char str string
+        bytes byte_buf unit unit_struct newtype_struct tuple
         tuple_struct map struct identifier ignored_any
     }
 }
@@ -377,10 +415,12 @@ impl<'de, 'a> VariantAccess<'de> for AttrEnum<'a, 'de> {
     where
         T: de::DeserializeSeed<'de>,
     {
+        log::debug!("newtype_variant_seed {:?}", self.de.peek()?);
         seed.deserialize(self.de)
     }
 
     fn unit_variant(self) -> Result<()> {
+        log::debug!("unit_variant");
         Ok(())
     }
 
@@ -403,8 +443,8 @@ pub fn from_str<'a, T>(s: &'a str) -> Result<T>
 where
     T: Deserialize<'a>,
 {
-    let mut deserializer = Deserializer::from_str(s);
-    Ok(T::deserialize(&mut deserializer)?)
+    let mut deserializer = Deserializer::from_str(s)?;
+    T::deserialize(&mut deserializer)
 }
 
 struct Attributes<'a, 'de: 'a> {
@@ -424,13 +464,19 @@ impl<'a, 'de> MapAccess<'de> for Attributes<'a, 'de> {
     where
         K: de::DeserializeSeed<'de>,
     {
+        log::debug!("next_key_seed ({:?})", self.de.peek()?);
         match self.de.peek()? {
             Node::AttributesEnd => {
                 self.de.next()?;
                 self.de.context = Context::Manifest;
                 Ok(None)
             }
-            _ => seed.deserialize(&mut *self.de).map(Some),
+            _ => {
+                self.de.context = Context::AttributeName;
+                let res = seed.deserialize(&mut *self.de).map(Some);
+                self.de.context = Context::Attributes;
+                res
+            }
         }
     }
 
@@ -438,7 +484,10 @@ impl<'a, 'de> MapAccess<'de> for Attributes<'a, 'de> {
     where
         V: de::DeserializeSeed<'de>,
     {
-        seed.deserialize(&mut *self.de)
+        log::debug!("next_value_seed ({:?})", self.de.peek()?);
+        let res = seed.deserialize(&mut *self.de)?;
+        self.de.context = Context::AttributeName;
+        Ok(res)
     }
 }
 
