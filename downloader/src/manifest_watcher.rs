@@ -1,8 +1,14 @@
 use hls::{Line, Tag};
 
+#[derive(Debug)]
+pub enum FileAdd {
+    Segment(String),
+    Key(String),
+}
+
 pub struct ManifestWatcher<F>
 where
-    F: FnMut(String),
+    F: FnMut(FileAdd),
 {
     first_segment: usize,
     segment_count: usize,
@@ -12,7 +18,7 @@ where
 
 impl<F> ManifestWatcher<F>
 where
-    F: FnMut(String),
+    F: FnMut(FileAdd),
 {
     pub fn new(data_added: F) -> Self {
         let first_segment = 0;
@@ -33,12 +39,15 @@ where
         for line in &new_manifest {
             match line {
                 Line::Tag(Tag::Key(attrs)) => {
-                    log::debug!("new key: {:?}", attrs);
+                    (self.data_added)(FileAdd::Key(
+                        attrs.uri.as_ref().map(|s| s.clone()).unwrap_or_default(),
+                    ));
                 }
                 Line::Uri(u) => {
                     i += 1;
                     if i > self.segment_count {
-                        (self.data_added)(format!("{}", u));
+                        self.segment_count += 1;
+                        (self.data_added)(FileAdd::Segment(u.to_owned()));
                     }
                 }
                 Line::Tag(t) => {
