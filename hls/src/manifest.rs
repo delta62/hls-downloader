@@ -25,10 +25,10 @@ pub enum HdcpLevel {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "SCREAMING-KEBAB-CASE")]
-pub struct MediaAttributes<'a> {
+pub struct MediaAttributes {
     #[serde(rename = "TYPE")]
     pub media_type: MediaType,
-    pub uri: Option<&'a str>,
+    pub uri: Option<String>,
     pub group_id: String,
     pub language: Option<String>,
     pub assoc_language: Option<String>,
@@ -78,13 +78,12 @@ pub struct KeyAttributes {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "SCREAMING-KEBAB-CASE")]
-pub enum Tag<'a> {
+pub enum Tag {
     M3u,
     IndependentSegments,
     Inf(f64),
     Key(KeyAttributes),
-    #[serde(borrow)]
-    Media(MediaAttributes<'a>),
+    Media(MediaAttributes),
     MediaSequence(u64),
     Targetduration(u64),
     Version(u64),
@@ -96,8 +95,7 @@ pub enum Tag<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-pub enum Line<'a> {
-    #[serde(borrow)]
-    Tag(Tag<'a>),
+pub enum Line {
+    Tag(Tag),
     Uri(String),
 }

@@ -5,4 +5,4 @@ mod models;
 mod parser;
 
 pub use de::from_str;
-pub use manifest::Line;
+pub use manifest::{Line, Tag};
