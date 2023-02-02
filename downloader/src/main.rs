@@ -1,37 +1,29 @@
 mod fs;
 mod manifest_watcher;
+mod work_queue;
 
 use std::path::Path;
 
 use hls::Line;
 use manifest_watcher::{FileAdd, ManifestWatcher};
+use work_queue::{WorkItem, WorkQueue};
 
 fn main() {
     env_logger::init();
 
     let path = std::env::args().nth(1).expect("Expected manifest to parse");
     let manifest = read_manifest(path);
+    let mut queue = WorkQueue::new();
 
     let mut watcher = ManifestWatcher::new(|message| match message {
-        FileAdd::Segment(s) => {
-            let dir_path = fs::parse_path_from_url(s.as_str()).unwrap();
-            let dir = dir_path.as_ref();
-            log::debug!("{:?}", dir);
-        }
-        FileAdd::Key(k) => {
-            let dir_path = fs::parse_path_from_url(k.as_str()).unwrap();
-            let dir = dir_path.as_ref();
-            log::debug!("{:?}", dir);
+        FileAdd::Segment(s) | FileAdd::Key(s) => {
+            let file_path = fs::parse_path_from_url(s.as_str()).unwrap();
+            let work_item = WorkItem::new(file_path);
+            queue.add(work_item);
         }
     });
 
     watcher.update(manifest);
-
-    // let path = std::env::args()
-    //     .nth(2)
-    //     .expect("Expected manifest to diff against");
-    // let next_manifest = read_manifest(path);
-    // watcher.update(next_manifest);
 }
 
 fn read_manifest<P: AsRef<Path>>(path: P) -> Vec<Line> {
