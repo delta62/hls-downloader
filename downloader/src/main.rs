@@ -1,10 +1,10 @@
+mod fs;
 mod manifest_watcher;
 
 use std::path::Path;
 
 use hls::Line;
 use manifest_watcher::{FileAdd, ManifestWatcher};
-use url::Url;
 
 fn main() {
     env_logger::init();
@@ -14,33 +14,24 @@ fn main() {
 
     let mut watcher = ManifestWatcher::new(|message| match message {
         FileAdd::Segment(s) => {
-            let base_url = Url::parse("http://example.com").unwrap();
-            let x = base_url.join(s.as_str()).unwrap();
-            let x = base_url.make_relative(&x).unwrap();
-            let p = Path::new(x.as_str());
-            let dir = p.parent().unwrap();
+            let dir_path = fs::parse_path_from_url(s.as_str()).unwrap();
+            let dir = dir_path.as_ref();
             log::debug!("{:?}", dir);
         }
         FileAdd::Key(k) => {
-            let x = Url::parse(k.as_str()).unwrap();
-            let base_url = x.origin().ascii_serialization();
-            let x = Url::parse(base_url.as_str())
-                .unwrap()
-                .make_relative(&x)
-                .unwrap();
-            let p = Path::new(x.as_str());
-            let dir = p.parent().unwrap();
+            let dir_path = fs::parse_path_from_url(k.as_str()).unwrap();
+            let dir = dir_path.as_ref();
             log::debug!("{:?}", dir);
         }
     });
 
     watcher.update(manifest);
 
-    let path = std::env::args()
-        .nth(2)
-        .expect("Expected manifest to diff against");
-    let next_manifest = read_manifest(path);
-    watcher.update(next_manifest);
+    // let path = std::env::args()
+    //     .nth(2)
+    //     .expect("Expected manifest to diff against");
+    // let next_manifest = read_manifest(path);
+    // watcher.update(next_manifest);
 }
 
 fn read_manifest<P: AsRef<Path>>(path: P) -> Vec<Line> {

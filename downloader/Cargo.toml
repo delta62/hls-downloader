@@ -8,3 +8,4 @@ hls = { path = "../hls" }
 env_logger = "0.10.0"
 log = "0.4.17"
 url = "2.3.1"
+lazy_static = "1.4.0"
