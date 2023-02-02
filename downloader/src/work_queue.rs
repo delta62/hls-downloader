@@ -1,13 +1,19 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
+use url::Url;
+
 pub struct WorkItem {
-    path: PathBuf,
+    local_path: PathBuf,
+    remote_url: Url,
 }
 
 impl WorkItem {
-    pub fn new(path: PathBuf) -> Self {
-        Self { path }
+    pub fn new(local_path: PathBuf, remote_url: Url) -> Self {
+        Self {
+            local_path,
+            remote_url,
+        }
     }
 }
 

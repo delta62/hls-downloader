@@ -1,24 +1,29 @@
+mod args;
 mod fs;
 mod manifest_watcher;
 mod work_queue;
 
+use clap::Parser;
 use std::path::Path;
+use url::Url;
 
+use args::Args;
 use hls::Line;
 use manifest_watcher::{FileAdd, ManifestWatcher};
-use work_queue::{WorkItem, WorkQueue};
+use work_queue::WorkQueue;
 
 fn main() {
     env_logger::init();
 
+    let args = Args::parse();
+    let manifest_url = Url::parse(args.manifest_url.as_str()).unwrap();
     let path = std::env::args().nth(1).expect("Expected manifest to parse");
     let manifest = read_manifest(path);
     let mut queue = WorkQueue::new();
 
     let mut watcher = ManifestWatcher::new(|message| match message {
         FileAdd::Segment(s) | FileAdd::Key(s) => {
-            let file_path = fs::parse_path_from_url(s.as_str()).unwrap();
-            let work_item = WorkItem::new(file_path);
+            let work_item = fs::parse_path_from_url(&manifest_url, s.as_str()).unwrap();
             queue.add(work_item);
         }
     });

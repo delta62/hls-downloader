@@ -1,33 +1,18 @@
-use lazy_static::lazy_static;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use url::{ParseError, Url};
 
-lazy_static! {
-    // The actual URL here is never used, but it's needed to fulfill the Uri
-    // crate's interface.
-    static ref BASE_URL: Url = Url::parse("http://example.org").unwrap();
-}
+use crate::work_queue::WorkItem;
 
-pub fn parse_path_from_url(url: &str) -> Result<PathBuf, ParseError> {
-    let complete_result = parse_path_from_complete_url(url);
+pub fn parse_path_from_url(manifest_url: &Url, url: &str) -> Result<WorkItem, ParseError> {
+    let remote_url = Url::parse(url).or_else(|e| {
+        if matches!(e, ParseError::RelativeUrlWithoutBase) {
+            manifest_url.join(url)
+        } else {
+            Err(e)
+        }
+    })?;
 
-    if let Err(ParseError::RelativeUrlWithoutBase) = complete_result {
-        parse_path_from_relative_url(url)
-    } else {
-        complete_result
-    }
-}
+    let local_path = Path::new(&remote_url.path()[1..]).to_path_buf();
 
-fn parse_path_from_complete_url(url: &str) -> Result<PathBuf, ParseError> {
-    let url = Url::parse(url)?;
-    let path = Path::new(&url.path()[1..]).to_path_buf();
-
-    Ok(path)
-}
-
-fn parse_path_from_relative_url(url: &str) -> Result<PathBuf, ParseError> {
-    let url = BASE_URL.join(url)?;
-    let path = Path::new(&url.path()[1..]).to_path_buf();
-
-    Ok(path)
+    Ok(WorkItem::new(local_path, remote_url))
 }
