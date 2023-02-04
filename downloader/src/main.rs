@@ -1,42 +1,82 @@
 mod args;
+mod download_worker;
 mod fs;
 mod manifest_watcher;
 mod work_queue;
 
 use clap::Parser;
-use std::path::Path;
+use crossbeam_deque::Worker;
+use std::{
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use url::Url;
 
 use args::Args;
 use hls::Line;
 use manifest_watcher::{FileAdd, ManifestWatcher};
-use work_queue::{FileType, WorkQueue};
+use work_queue::FileType;
 
-fn main() {
+const WORKER_COUNT: usize = 4;
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     env_logger::init();
 
     let args = Args::parse();
     let base_url = Url::parse(args.base_url.as_str()).unwrap();
     let manifest = read_manifest(args.manifest_path);
-    let mut queue = WorkQueue::new();
+    let worker = Worker::new_fifo();
+    let is_done = Arc::new(AtomicBool::new(false));
+    let mut worker_handles = Vec::with_capacity(WORKER_COUNT);
+
+    for _ in 0..WORKER_COUNT {
+        let stealer = worker.stealer();
+        let is_done = is_done.clone();
+        worker_handles.push(tokio::spawn(async move {
+            while !is_done.load(Ordering::Relaxed) {
+                match stealer.steal() {
+                    crossbeam_deque::Steal::Empty => {
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                    }
+                    crossbeam_deque::Steal::Retry => {
+                        log::warn!("failed to read from the download queue. retrying...");
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                    }
+                    crossbeam_deque::Steal::Success(work_item) => {
+                        log::debug!("Stole some work {:?}", work_item);
+                    }
+                }
+            }
+        }));
+    }
 
     let mut watcher = ManifestWatcher::new(|message| match message {
         FileAdd::Segment(s) => {
             let work_item =
                 fs::parse_path_from_url(&base_url, s.as_str(), FileType::MediaSegment).unwrap();
-            queue.add(work_item);
+            worker.push(work_item);
         }
         FileAdd::Key(s) => {
             let work_item = fs::parse_path_from_url(&base_url, s.as_str(), FileType::Key).unwrap();
-            queue.add(work_item);
+            worker.push(work_item);
         }
     });
 
     watcher.update(manifest);
 
-    while let Some(work_item) = queue.take() {
-        fs::mkdirp(args.output_dir.as_str(), &work_item).unwrap();
-        // log::debug!("{:?}", work_item);
+    while !worker.is_empty() {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+
+    is_done.store(true, Ordering::Relaxed);
+
+    for handle in worker_handles {
+        handle.await.unwrap();
     }
 }
 
